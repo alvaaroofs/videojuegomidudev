@@ -1,73 +1,45 @@
 import { useState } from "react"
+import confetti from "canvas-confetti"
 
-const TURNS = {
-  X: 'x',
-  O: 'o'
-}
-
-
-//Si isSelected is true, enseñamos visualmente si le toca a uno o a otro.
-//Por eso le pasamos el className al className del <div>
-const Square = ({ children, isSelected, updateBoard, index}) => {
-
-  const className = `square ${isSelected ? 'is-selected' : ''}`
-
-  const handleClick = () => {
-    updateBoard(index)
-  }
-  return (
-    <div onClick={handleClick} className={className}>
-      {children}
-    </div>
-  )
-}
-
-
-//Ahora meteremos las combinaciones ganadoras, atendiendo a las filas y columnas que tenemos:
-const WINNER_COMBOS = [
-  [0, 1, 2],
-  [3, 4, 5],
-  [6, 7, 8],
-  [8, 3, 6],
-  [1, 4, 7],
-  [2, 5, 8],
-  [0, 4, 8],
-  [2, 4, 6],
-]
-
+import { Square } from "./components/Square"
+import { TURNS } from "./constants.js"
+import { checkWinner, checkEndGame } from "./logic/board.js"
+import { WinnerModal } from "./components/WinnerModal.jsx"
 
 function App() {
   //const board = Array(9).fill(null) como queremos usar un estado, no podemos usar esta linea
-  const [board, setBoard] = useState(Array(9).fill(null))
-  
+  const [board, setBoard] = useState(() => {
+    const boardFromStorage = window.localStorage.getItem('board')
+    if (boardFromStorage) return JSON.parse(boardFromStorage)
+      return Array(9).fill(null)
+  })
+
   //Crearemos un estado para saber de quien es el turno
-  const [turn, setTurn] = useState(TURNS.X)
+  const [turn, setTurn] = useState(() => {
+    const turnFromStorage = window.localStorage.getItem('turn')
+    return turnFromStorage ?? TURNS.X
+  })
 
   //En este caso, null es que hay un ganador, false que no lo hay
   const [winner, setWinner] = useState(null)
 
-  const checkWinner = (boardToCheck) => {
-    //Para cada combinacion del WINNER_COMBOS, recuperamos las posiciones a, b, c Ej: [0, 1, 2]
-    //De esta forma, vamos a verificar que tenemos en cada elemento, para decidir cual es el ganador
-    for (const combo of WINNER_COMBOS){
-      const [a, b, c] = combo
-      if (
-        boardToCheck[a] &&
-        boardToCheck[a] == boardToCheck[b] &&
-        boardToCheck[a] == boardToCheck[c]
-      ){
-        return boardToCheck[a]
-      }
-    }
-    //Si no sale ganador
-    return null
+
+  //Con este componente, volvemos a establecer los valores por defecto que queramos que aparezcan
+  const resetGame = () => {
+    setBoard(Array(9).fill(null))
+    setTurn(TURNS.X)
+    setWinner(null)
+
+    window.localStorage.removeItem('board')
+    window.localStorage.removeItem('turn')
   }
+
 
   const updateBoard = (index) => {
       //Para no sobreescribir info que ya hemos metido, metemos la siguiente logica para indicar
       //que si tiene algo no actualizamos la posicion
       //con || winner ; si ya hay un ganador tampoco nos dejara seguir jugando
-      if (board[index] || winner) return 
+  if (board[index] || winner) return 
 
   //1.Actualizar el tablero
     const newBoard = [...board]
@@ -80,22 +52,32 @@ function App() {
     const newTurn = turn == TURNS.X ? TURNS.O : TURNS.X
     setTurn(newTurn)
 
+  //2.1 Guardar la partida
+    window.localStorage.setItem('board', JSON.stringify(newBoard))
+    window.localStorage.setItem('turn', newTurn)
+
   //3.Verificar si hay ganador
     const newWinner = checkWinner(newBoard)
     if (newWinner) {
-      alert(`El ganador es ${newWinner}`)
+      confetti()
       setWinner(newWinner)
+    } else if (checkEndGame(newBoard)){
+      setWinner(false)
     }
   }
+  //Las actualizaciones de estados en react son asincronos; no bloquea la ejecucion del codigo que viene despues
+
+
+
 //La funcion de updateBoard, la llamamos y le pasamos la propia updateBoard, ya que asi
 //lo podemos ejecutar cuando queramos
-
   return (
     <main className='board'>
-      <h1> Tres en raya </h1>
+      <h1> Tres en - </h1>
+      <button onClick={resetGame}> Restart </button>
       <section className="game">
         {
-          board.map((_, index) => {
+          board.map((square, index) => {
             return(
               <Square
               key={index}
@@ -109,7 +91,6 @@ function App() {
         }
       </section>
 
-      
       <section className="turn">
         <Square isSelected={turn == TURNS.X}>
           {TURNS.X}
@@ -118,8 +99,11 @@ function App() {
           {TURNS.O}
         </Square>
       </section>
+
+      <WinnerModal resetGame={resetGame} winner={winner}/>
     </main>
+    //En el boton de empezar de nuevo, vamos a resetear el estado a su valor inicial
+    //para evitar tener que refrescar la pagina por nosotros mismos
   )
 }
-
 export default App
